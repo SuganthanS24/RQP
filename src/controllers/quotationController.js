@@ -6,22 +6,44 @@ import Terms from "../models/Terms.js";
 import TeamMember from "../models/TeamMember.js";
 import fs from "fs";
 import path from "path";
-import puppeteer from "puppeteer";
+import puppeteerCore from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import https from "https";
 import { generateHTMLTemplate } from "../utils/pdfTemplate.js";
 
 let browserInstance = null;
 const getBrowser = async () => {
   if (!browserInstance || !browserInstance.isConnected()) {
-    browserInstance = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
+    try {
+      // Try to use the pre-compiled Chromium (works perfectly on Render/Cloud)
+      const executablePath = await chromium.executablePath();
+      if (!executablePath) throw new Error("No executable path");
+
+      browserInstance = await puppeteerCore.launch({
+        args: [
+          ...chromium.args,
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--no-sandbox",
+        ],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: executablePath,
+        headless: chromium.headless,
+      });
+    } catch (error) {
+      // Fallback for local development (Windows/Mac)
+      console.log("Falling back to local puppeteer...", error.message);
+      const puppeteer = (await import("puppeteer")).default;
+      browserInstance = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+        ],
+      });
+    }
   }
   return browserInstance;
 };
